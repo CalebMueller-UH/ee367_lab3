@@ -72,6 +72,50 @@ void displayFile(int new_fd, char *response, int pipefd[]) {
   }
 }
 
+void downloadFile(int new_fd, char *response) {
+  char replyMsg[BUFFERSIZE];
+
+  // extracts the filename from the response
+  char filename[BUFFERSIZE];
+  sscanf(response, "%*c %s", filename);
+
+  // check if the server has the file named <filename>
+  if (access(filename, F_OK) != -1) {
+    // file exists
+    // send the file to the client
+    int file_size;
+    char buffer[BUFFERSIZE];
+    FILE *file = fopen(filename, "rb");
+    if (file == NULL) {
+      perror("Error opening file");
+    } else {
+      fseek(file, 0, SEEK_END);
+      file_size = ftell(file);
+      rewind(file);
+      snprintf(buffer, sizeof(buffer), "%d", file_size);
+      send(new_fd, buffer, sizeof(buffer), 0);
+      while (file_size > 0) {
+        int bytes_read = fread(buffer, 1, sizeof(buffer), file);
+        if (bytes_read == 0) {
+          break;
+        }
+        if (send(new_fd, buffer, bytes_read, 0) < 0) {
+          perror("Error sending file");
+          break;
+        }
+        file_size -= bytes_read;
+      }
+      fclose(file);
+    }
+  } else {
+    // file does not exist
+    snprintf(replyMsg, strnlen(replyMsg, BUFFERSIZE), "File '%s' not found",
+             filename);
+    // Send reply back to client
+    send(new_fd, replyMsg, sizeof(replyMsg), 0);
+  }
+}
+
 int main(void) {
   // Get address information for this server which includes the IP address of
   // the local machine, and the TCP port number of the server, in this
@@ -219,11 +263,19 @@ int main(void) {
           break;
         case 'd':
         case 'D':
+          downloadFile(new_fd, response);
           break;
         case 'h':
         case 'H':
-        default:
           printHelpMenu(new_fd);
+          break;
+        default:
+          char blank[] = "";
+          int n = send(new_fd, blank, sizeof(blank), 0);
+          if (n == -1) {
+            perror("send");
+            continue;
+          }
       }
 
     } else {

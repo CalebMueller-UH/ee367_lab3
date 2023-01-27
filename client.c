@@ -75,9 +75,32 @@ int main(int argc, char *argv[]) {
     fgets(input, BUFFERSIZE, stdin);
 
     // Check if user wants to quit
-    if (input[0] == 'q') {
+    if (input[0] == 'q' || input[0] == 'Q') {
       closeSocket(servinfo, sockfd);
       break;
+    }
+
+    if (input[0] == 'd' || input[0] == 'D') {
+      char filename[BUFFERSIZE];
+      char dummy;
+      sscanf(input, "%s %s", &dummy,
+             filename);  // dummy variable to discard the "d " or "D " prefix
+      if (access(filename, F_OK) != -1) {
+        char answer[BUFFERSIZE];
+        printf("The file %s already exists, do you want to overwrite it? (y/n)",
+               filename);
+        fgets(answer, BUFFERSIZE, stdin);
+        if (answer[0] == 'y' || answer[0] == 'Y') {
+          // proceed to send the command to the server
+          if (send(sockfd, input, strlen(input), 0) == -1) {
+            perror("send");
+            exit(1);
+          }
+        } else {
+          // stop processing the command
+          continue;
+        }
+      }
     }
 
     // Send input to the server
