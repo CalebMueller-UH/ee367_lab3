@@ -8,6 +8,30 @@ void *get_in_addr(struct sockaddr *sa);
 // function for freeing correct socket shutdown
 void closeSocket(struct addrinfo *servinfo, int sockfd);
 
+void downloadFile(int sockfd, char *fileName) {
+  char buffer[BUFFERSIZE];
+  int n;
+  FILE *fp;
+
+  // Send the file name to the server
+  write(sockfd, fileName, strlen(fileName));
+
+  // Open a file to write the downloaded data
+  fp = fopen(fileName, "w");
+  if (fp == NULL) {
+    perror("Error opening file");
+    exit(1);
+  }
+
+  // Receive the file data from the server
+  while ((n = read(sockfd, buffer, BUFFERSIZE)) > 0) {
+    fwrite(buffer, sizeof(char), n, fp);
+  }
+
+  // Close the file
+  fclose(fp);
+}
+
 int main(int argc, char *argv[]) {
   // hints used in getaddrinfo()
   struct addrinfo hints;
@@ -96,6 +120,9 @@ int main(int argc, char *argv[]) {
             perror("send");
             exit(1);
           }
+          // download the file
+          downloadFile(sockfd, filename);
+
         } else {
           // stop processing the command
           continue;
