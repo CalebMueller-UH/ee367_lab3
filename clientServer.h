@@ -21,7 +21,7 @@
 #include <sys/wait.h>
 #include <unistd.h>
 
-#define MAXDATASIZE 100
+#define BUFFERSIZE 256
 
 void *get_in_addr(struct sockaddr *sa) {
   if (sa->sa_family == AF_INET) {  // Return IPv4 address

@@ -14,6 +14,64 @@ void sigchld_handler(int s) {
 // Definition of get_in_addr found in clientServer.h
 void *get_in_addr(struct sockaddr *sa);
 
+void printHelpMenu(int new_fd) {
+  const char helpMenu[] =
+      "Help Menu:\nl: List\nc: Check <file name>\np: Display <file "
+      "name>\nd: Download <file name>\nq: Quit\nh: Help\n";
+
+  int n = send(new_fd, helpMenu, sizeof(helpMenu), 0);
+  if (n == -1) {
+    perror("send");
+  }
+}
+
+void checkForFile(int new_fd, char *response) {
+  char replyMsg[BUFFERSIZE];
+
+  // extracts the filename from the response
+  char filename[BUFFERSIZE];
+  sscanf(response, "%*c %s", filename);
+
+  // check if the server has the file named <filename>
+  if (access(filename, F_OK) != -1) {
+    // file exists
+    snprintf(replyMsg, strnlen(replyMsg, BUFFERSIZE), "File '%s' exists",
+             filename);
+  } else {
+    // file does not exist
+    snprintf(replyMsg, strnlen(replyMsg, BUFFERSIZE), "File '%s' not found",
+             filename);
+  }
+
+  // Send reply back to client
+  send(new_fd, replyMsg, sizeof(replyMsg), 0);
+}
+
+void displayFile(int new_fd, char *response, int pipefd[]) {
+  char replyMsg[BUFFERSIZE];
+
+  // extracts the filename from the response
+  char filename[BUFFERSIZE];
+  sscanf(response, "%*c %s", filename);
+
+  // check if the server has the file named <filename>
+  if (access(filename, F_OK) != -1) {
+    // file exists
+    // setup a pipe to redirect server system stdout to client stream
+    close(pipefd[0]);    // close the read end in the child process
+    dup2(pipefd[1], 1);  // redirect stdout to the write end of the pipe
+    close(pipefd[1]);    // close the duplicate write end
+    // execute the cat command
+    execlp("cat", "cat", filename, NULL);
+  } else {
+    // file does not exist
+    snprintf(replyMsg, strnlen(replyMsg, BUFFERSIZE), "File '%s' not found",
+             filename);
+    // Send reply back to client
+    send(new_fd, replyMsg, sizeof(replyMsg), 0);
+  }
+}
+
 int main(void) {
   // Get address information for this server which includes the IP address of
   // the local machine, and the TCP port number of the server, in this
@@ -104,6 +162,8 @@ int main(void) {
     struct sockaddr_storage their_addr;  // connector's addr information
     socklen_t sin_size = sizeof their_addr;
     int new_fd = accept(sockfd, (struct sockaddr *)&their_addr, &sin_size);
+
+    // Set up a pipe for stdout redirection via dup2 for server system output
     int pipefd[2];
     pipe(pipefd);
 
@@ -112,7 +172,7 @@ int main(void) {
       continue;
     }
 
-    // Display who the client is
+    // Print the IP address of the client that connected to the server
     char s[INET6_ADDRSTRLEN];
     inet_ntop(their_addr.ss_family, get_in_addr((struct sockaddr *)&their_addr),
               s, sizeof s);
@@ -120,16 +180,56 @@ int main(void) {
 
     // If the server was able to successfully create a fork
     if (!fork()) {
-      // setup a pipe to redirect server system stdout to client stream
-      close(pipefd[0]);    // close the read end in the child process
-      dup2(pipefd[1], 1);  // redirect stdout to the write end of the pipe
-      close(pipefd[1]);    // close the duplicate write end
+      // Send command prompt
+      const char prompt[] = "\nCommand(enter 'h' for help): ";
+      int n = send(new_fd, prompt, sizeof(prompt), 0);
+      if (n == -1) {
+        perror("send");
+        continue;
+      }
 
-      execlp("ls", "ls", NULL);  // execute the ls command
+      // Wait to receive a response back from the client
+      char response[256];
+      n = recv(new_fd, response, sizeof(response), 0);
+      if (n == -1) {
+        perror("recv");
+        continue;
+      }
+
+      // Print the response received from the client
+      printf("server: received response from %s: %s\n", s, response);
+
+      switch (response[0]) {
+        case 'l':
+        case 'L':
+          // setup a pipe to redirect server system stdout to client stream
+          close(pipefd[0]);    // close the read end in the child process
+          dup2(pipefd[1], 1);  // redirect stdout to the write end of the pipe
+          close(pipefd[1]);    // close the duplicate write end
+          // execute the ls command
+          execlp("ls", "ls", NULL);
+          break;
+        case 'c':
+        case 'C':
+          checkForFile(new_fd, response);
+          break;
+        case 'p':
+        case 'P':
+          displayFile(new_fd, response, pipefd);
+          break;
+        case 'd':
+        case 'D':
+          break;
+        case 'h':
+        case 'H':
+        default:
+          printHelpMenu(new_fd);
+      }
+
     } else {
       close(pipefd[1]);  // close the write end in the parent process
-      char buf[MAXDATASIZE];
-      int numbytes = read(pipefd[0], buf, MAXDATASIZE);
+      char buf[BUFFERSIZE];
+      int numbytes = read(pipefd[0], buf, BUFFERSIZE);
       send(new_fd, buf, numbytes, 0);
       close(pipefd[0]);
       close(new_fd);

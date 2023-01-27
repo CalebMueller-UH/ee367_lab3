@@ -9,16 +9,6 @@ void *get_in_addr(struct sockaddr *sa);
 void closeSocket(struct addrinfo *servinfo, int sockfd);
 
 int main(int argc, char *argv[]) {
-  // Temporarily turned off for testing.  @todo, reimplement usage instructions
-  //   if (argc != 2) {
-  //     fprintf(stderr, "usage: client hostname\n");
-  //     exit(1);
-  //   }
-
-  // Get address information of server with IP address (or domain name)
-  // ‘argv[1]’ and TCP port number PORT = “3490”. It’s a stream connection which
-  // can be IPv4 or IPv6
-
   // hints used in getaddrinfo()
   struct addrinfo hints;
 
@@ -34,9 +24,10 @@ int main(int argc, char *argv[]) {
     return 1;
   }
 
+  int sockfd;
+
   while (1) {
     ////////////////// Connect to the server: ///////////////////////////
-    int sockfd;
     struct addrinfo *p;
     for (p = servinfo; p != NULL; p = p->ai_next) {
       // Attempt Socket Creation
@@ -62,24 +53,46 @@ int main(int argc, char *argv[]) {
       return 2;
     }
 
-    // Socket Connection Passed ********
+    // Socket Connection Passed ****************************
     // Notify user of connection success
     char s[INET6_ADDRSTRLEN];  // Buffer to store char string
     inet_ntop(p->ai_family, get_in_addr((struct sockaddr *)p->ai_addr), s,
               sizeof s);
-    printf("client: connecting to %s\n", s);
+    // printf("client: connecting to %s\n", s);
 
     // Display what’s received from server
     int numbytes;
-    char buf[MAXDATASIZE];
-    if ((numbytes = recv(sockfd, buf, MAXDATASIZE - 1, 0)) == -1) {
-      // Note that recv() can be replaced by read() since flags = 0
+    char buf[BUFFERSIZE];
+    if ((numbytes = recv(sockfd, buf, BUFFERSIZE - 1, 0)) == -1) {
       perror("recv");
       exit(1);
     }
     buf[numbytes] = '\0';
-    printf("client: received '%s'\n", buf);
-    closeSocket(servinfo, sockfd);
+    printf("%s", buf);
+
+    // Get input from the user
+    char input[BUFFERSIZE];
+    fgets(input, BUFFERSIZE, stdin);
+
+    // Check if user wants to quit
+    if (input[0] == 'q') {
+      closeSocket(servinfo, sockfd);
+      break;
+    }
+
+    // Send input to the server
+    if (send(sockfd, input, strlen(input), 0) == -1) {
+      perror("send");
+      exit(1);
+    }
+
+    // Receive response from the server
+    if ((numbytes = recv(sockfd, buf, BUFFERSIZE - 1, 0)) == -1) {
+      perror("recv");
+      exit(1);
+    }
+    buf[numbytes] = '\0';
+    printf("%s", buf);
 
   }  // End of while(1)
   return 0;
