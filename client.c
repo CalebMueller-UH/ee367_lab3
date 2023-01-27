@@ -82,19 +82,19 @@ int main(int argc, char *argv[]) {
     server. Start sending the contents of argv[2] for as many elements that
     exist If argc < 2 then do nothing
   */
-  char sendbuf[MAXDATASIZE];
-  memset(sendbuf, 0, sizeof(sendbuf));
-  for (int i = 2; i < argc; i++) {
-    strcat(sendbuf, argv[i]);
-    strcat(sendbuf, " ");
-  }
-  sendbuf[strlen(sendbuf) - 1] = '\0';
+  //   char sendbuf[MAXDATASIZE];
+  //   memset(sendbuf, 0, sizeof(sendbuf));
+  //   for (int i = 2; i < argc; i++) {
+  //     strcat(sendbuf, argv[i]);
+  //     strcat(sendbuf, " ");
+  //   }
+  //   sendbuf[strlen(sendbuf) - 1] = '\0';
 
-  // Send the command line arguments to the server
-  if (send(sockfd, sendbuf, strlen(sendbuf), 0) == -1) {
-    perror("send");
-    exit(1);
-  }
+  //   // Send the command line arguments to the server
+  //   if (send(sockfd, sendbuf, strlen(sendbuf), 0) == -1) {
+  //     perror("send");
+  //     exit(1);
+  //   }
 
   // Display what’s received from server
   int numbytes;
