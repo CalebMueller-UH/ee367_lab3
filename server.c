@@ -1,12 +1,3 @@
-/*
-    File: server.c
-    Description:
-        a stream socket server demo
-        EE367L - Lab #3 - Part 2 Assignment
-    Name: Caleb Mueller
-    Date: 26 January 2023
-*/
-
 #include "clientServer.h"
 
 #define PORT "3622"  // Group assigned port used by server: used by the client
@@ -15,11 +6,12 @@
 // sigchld_handler is used to clean up zombie processes
 // This will be explained later
 void sigchld_handler(int s) {
-  while (waitpid(-1, NULL, WNOHANG) > 0)
-    ;
+  while (waitpid(-1, NULL, WNOHANG) > 0) {
+    continue;  // do nothing
+  }
 }
 
-// Definition of get_in_addr held in clientServer.h
+// Definition of get_in_addr found in clientServer.h
 void *get_in_addr(struct sockaddr *sa);
 
 int main(void) {
@@ -98,8 +90,10 @@ int main(void) {
     perror("sigaction");
     exit(1);
   }
+
   printf("server: waiting for connections...\n");
-  // The server runs forever in a while-loop
+
+  // The server runs forever in a while-loop ****************************
   // In each pass of the loop, the server will accept() a connection
   // request from a client. accept() will return the socket fd for
   // the connection.
@@ -122,13 +116,15 @@ int main(void) {
     char s[INET6_ADDRSTRLEN];
     inet_ntop(their_addr.ss_family, get_in_addr((struct sockaddr *)&their_addr),
               s, sizeof s);
-    printf("server: got connection from %s\n", s);
+    printf("server: connection from %s\n", s);
 
     // If the server was able to successfully create a fork
     if (!fork()) {
-      close(pipefd[0]);          // close the read end in the child process
-      dup2(pipefd[1], 1);        // redirect stdout to the write end of the pipe
-      close(pipefd[1]);          // close the duplicate write end
+      // setup a pipe to redirect server system stdout to client stream
+      close(pipefd[0]);    // close the read end in the child process
+      dup2(pipefd[1], 1);  // redirect stdout to the write end of the pipe
+      close(pipefd[1]);    // close the duplicate write end
+
       execlp("ls", "ls", NULL);  // execute the ls command
     } else {
       close(pipefd[1]);  // close the write end in the parent process
@@ -138,32 +134,6 @@ int main(void) {
       close(pipefd[0]);
       close(new_fd);
     }
-
-    //////////////// Exercise 2 Implementation /////////////////////////////
-    // Print out the received string sent by client to server
-    // char receivedString[256];
-    // int numBytes;
-    // if ((numBytes = recv(new_fd, receivedString, sizeof(receivedString), 0))
-    // ==
-    //     -1) {
-    //   perror("recv");
-    //   exit(1);
-    // }
-    // receivedString[numBytes] = '\0';
-    // printf("Server: received '%s'\n", receivedString);
-
-    // // Convert the received string's lowercase characters to uppercase
-    // for (int i = 0; i < numBytes; i++) {
-    //   receivedString[i] = toupper(receivedString[i]);
-    // }
-
-    // // return the capitalized string back to the client
-    // if (send(new_fd, receivedString, numBytes, 0) == -1) {
-    //   perror("send");
-    //   exit(1);
-    // }
-    // close(new_fd);  // parent doesn't need this
-    // exit(0);
   }
   return 0;
 }
