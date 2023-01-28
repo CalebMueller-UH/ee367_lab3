@@ -1,4 +1,4 @@
-#include "clientServer.h"
+#include "server.h"
 
 #define PORT "3622"  // Group assigned port used by server: used by the client
 #define BACKLOG 10   // how many pending connections queue will hold
@@ -144,11 +144,11 @@ int main(void) {
         case 'd':
         case 'D':
           pipeRedirect(new_fd, response, sendFileToClient);
-          // sendFileToClient(new_fd, response);
           break;
         case 'h':
         case 'H':
           printHelpMenu(new_fd);
+          break;
         case 'l':
         case 'L':
           pipeRedirect(new_fd, response, listFile);
@@ -156,7 +156,6 @@ int main(void) {
         case 'p':
         case 'P':
           pipeRedirect(new_fd, response, displayFile);
-          // displayFile(new_fd, response);
           break;
         default:
           char blank[] = "";
