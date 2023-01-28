@@ -15,12 +15,15 @@ void initiateFileDownload(int sockfd, char *input) {
   // Grab filename from command "d <filename>"
   char filename[BUFFERSIZEMAX];
   sscanf(input, "%*c %s", filename);
+  // create a char array to store the full path of the file
+  char fullpath[BUFFERSIZEMAX] = "./cdir/";
+  strcat(fullpath, filename);  // concatenate the filename to the path
 
   // Determine if the filename already exists
-  if (access(filename, F_OK) != -1) {
+  if (access(fullpath, F_OK) != -1) {
     // filename already exists, query user if they'd like to overwrite
     printf("The file %s already exists, do you want to overwrite it? (y/n)",
-           filename);
+           fullpath);
     char answer[BUFFERSIZEMAX];
     fgets(answer, BUFFERSIZEMAX, stdin);
     if (answer[0] == 'y' || answer[0] == 'Y') {
@@ -28,36 +31,67 @@ void initiateFileDownload(int sockfd, char *input) {
       // Continue without returning
     } else {
       // User doesn't want to overwrite
+      printf("n happened\n");
       return;
     }
   }
 
-  // filename doesn't exists or filename exists and user wants to overwrite
+  // filename doesn't exists or user wants to overwrite
+  // Download the file
   // Send download command to server to initiate file download
-  if (send(sockfd, input, strlen(input), 0) == -1) {
-    perror("send error");
-    // exit(1);
-    return;
+  if (send(sockfd, input, strnlen(input, BUFFERSIZEMAX), 0) == -1) {
+    perror("initializeFileDownload: send error");
+    exit(1);
   }
 
-  // \/ \/ \/ \/ Download the file \/ \/ \/ \/
   // Open a file to write the downloaded data
   FILE *fp;
-  fp = fopen(filename, "w");
+  fp = fopen(fullpath, "w+");
   if (fp == NULL) {
-    perror("Error opening file");
+    perror("initializeFileDownload: Error opening file");
     exit(1);
   }
 
   // Receive the file data from the server
   char buffer[BUFFERSIZEMAX];
   int bytesBeingRead;
-  while ((bytesBeingRead = read(sockfd, buffer, BUFFERSIZEMAX)) > 0) {
+
+  // Get the file_size from the server
+  int file_size;
+  if (recv(sockfd, &file_size, sizeof(file_size), 0) < 0) {
+    perror("initializeFileDownload: filesize receipt error");
+    exit(1);
+  }
+  file_size = ntohl(file_size);
+
+  // char file_size_str[BUFFERSIZEMAX];
+  // if ((bytesBeingRead = recv(sockfd, file_size_str, BUFFERSIZEMAX - 1, 0)) >
+  //     0) {
+  //   int file_size = atoi(file_size_str);
+  // } else {
+  //   perror("initializeFileDownload: filesize receipt error");
+  //   exit(1);
+  // }
+
+  printf("file_size: %d\n", file_size);
+
+  int recData = 0;
+  while ((bytesBeingRead = recv(sockfd, buffer, BUFFERSIZEMAX - 1, 0)) > 0) {
+    recData += bytesBeingRead;
+    printf("recData: %d, bytesBeingRead: %d\n", recData, bytesBeingRead);
     fwrite(buffer, sizeof(char), bytesBeingRead, fp);
+    printf("wrote to file\n");
+    if (bytesBeingRead < BUFFERSIZEMAX || recData >= file_size) {
+      // End of file reached
+      break;
+    }
   }
 
   // Close the file when done writing
-  fclose(fp);
+  if (fclose(fp) != 0) {
+    perror("initializeFileDownload: error closing file");
+  }
+  printf("file closed\n");
 }  // end of initiateFileDownload()
 
 int main(int argc, char *argv[]) {
@@ -132,6 +166,7 @@ int main(int argc, char *argv[]) {
       break;
     } else if (input[0] == 'd' || input[0] == 'D') {
       initiateFileDownload(sockfd, input);
+      continue;
     }
 
     // Send input to the server

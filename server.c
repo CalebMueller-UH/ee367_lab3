@@ -19,7 +19,7 @@ void printHelpMenu(int new_fd) {
       "Help Menu:\nl: List\nc: Check <file name>\np: Display <file "
       "name>\nd: Download <file name>\nq: Quit\nh: Help\n";
 
-  int n = send(new_fd, helpMenu, sizeof(helpMenu), 0);
+  int n = send(new_fd, helpMenu, strnlen(helpMenu, BUFFERSIZEMAX), 0);
   if (n == -1) {
     perror("send");
   }
@@ -86,33 +86,51 @@ void downloadFile(int new_fd, char *response) {
   // extracts the filename from the response
   char filename[BUFFERSIZEMAX];
   sscanf(response, "%*c %s", filename);
+  // create a char array to store the full path of the file
+  char fullpath[BUFFERSIZEMAX] = "./sdir/";
+  strcat(fullpath, filename);  // concatenate the filename to the path
 
   // check if the server has the file named <filename>
-  if (access(filename, F_OK) != -1) {
+  if (access(fullpath, F_OK) != -1) {
     // file exists
     // send the file to the client
     int file_size;
     char fileBuffer[BUFFERSIZEMAX];
-    FILE *file = fopen(filename, "rb");
+    FILE *file = fopen(fullpath, "rb");
 
     // Check if file was successfully opened
     if (file == NULL) {
       perror("Error opening file");
     } else {
       // File opened successfully
+
+      // Determine file_ize
       fseek(file, 0, SEEK_END);
       file_size = ftell(file);
       rewind(file);
-      snprintf(fileBuffer, sizeof(fileBuffer), "%d", file_size);
-      send(new_fd, fileBuffer, sizeof(fileBuffer), 0);
+
+      // Put file_size in network bit order before sending
+      file_size = htonl(file_size);
+      send(new_fd, &file_size, sizeof(file_size), 0);
+
+      // Send file_size to client
+      // memset(&fileBuffer, 0, sizeof fileBuffer);
+      // snprintf(fileBuffer, sizeof(fileBuffer), "%d", file_size);
+      // send(new_fd, fileBuffer, strnlen(fileBuffer, BUFFERSIZEMAX), 0);
+
+      // Ferry file data accross socket to client
+      int sentData = 0;
       while (file_size > 0) {
         int bytes_read = fread(fileBuffer, 1, sizeof(fileBuffer), file);
-        if (bytes_read < BUFFERSIZEMAX) {
-          // End of file reached
-          break;
-        }
+        sentData += bytes_read;
+        printf("Sent data: %d\n", sentData);
         if (send(new_fd, fileBuffer, bytes_read, 0) < 0) {
           perror("Error sending file");
+          break;
+        }
+        if (bytes_read < BUFFERSIZEMAX) {
+          printf("End of file reached\n");
+          // End of file reached
           break;
         }
         file_size -= bytes_read;
@@ -127,14 +145,10 @@ void downloadFile(int new_fd, char *response) {
              filename);
     send(new_fd, replyMsg, strnlen(replyMsg, BUFFERSIZEMAX), 0);
   }
+  printf("reached end of downloadFile\n");
 }  // end of downloadFile()
 
 int main(void) {
-  // Get address information for this server which includes the IP address of
-  // the local machine, and the TCP port number of the server, in this
-  // case PORT = “3490”. It’s a stream connection which can be
-  // IPv4 or IPv6. This is similar to client.c but we want the
-  // IP address of the local machine
   struct addrinfo hints;
   memset(&hints, 0, sizeof hints);
   hints.ai_family = AF_UNSPEC;
@@ -215,9 +229,12 @@ int main(void) {
   //
   // After creating the connection, the server will create a child process
   // to reply to the client.
-  while (1) {                            // main accept() loop
+  while (1) {
+    // main accept() loop
     struct sockaddr_storage their_addr;  // connector's addr information
     socklen_t sin_size = sizeof their_addr;
+
+    // Accept connection from a client
     int new_fd = accept(sockfd, (struct sockaddr *)&their_addr, &sin_size);
 
     // Set up a pipe for stdout redirection via dup2 for server system output
@@ -239,7 +256,7 @@ int main(void) {
     if (!fork()) {
       // Send command prompt
       const char prompt[] = "\nCommand(enter 'h' for help): ";
-      int n = send(new_fd, prompt, sizeof(prompt), 0);
+      int n = send(new_fd, prompt, strnlen(prompt, BUFFERSIZEMAX), 0);
       if (n == -1) {
         perror("send");
         continue;
@@ -284,18 +301,18 @@ int main(void) {
           break;
         default:
           char blank[] = "";
-          int n = send(new_fd, blank, sizeof(blank), 0);
+          int n = send(new_fd, blank, strnlen(blank, BUFFERSIZEMAX), 0);
           if (n == -1) {
             perror("send");
             continue;
           }
-      }
+      }  // end of switch
 
     } else {
       close(pipefd[1]);  // close the write end in the parent process
       char buf[BUFFERSIZEMAX];
       int numbytes = read(pipefd[0], buf, BUFFERSIZEMAX);
-      send(new_fd, buf, numbytes, 0);
+      send(new_fd, buf, strnlen(buf, BUFFERSIZEMAX), 0);
       close(pipefd[0]);
       close(new_fd);
     }
