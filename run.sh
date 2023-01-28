@@ -2,6 +2,8 @@
 
 clear
 make
+
 gnome-terminal -e ./sdir/server 
-./cdir/client localhost
+gnome-terminal -e ./cdir/client localhost 
+
 

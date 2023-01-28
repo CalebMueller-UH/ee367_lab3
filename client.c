@@ -11,7 +11,7 @@ void closeSocket(struct addrinfo *servinfo, int sockfd) {
   close(sockfd);
 }
 
-void initiateFileDownload(int sockfd, char *input) {
+void downloadFileFromServer(int sockfd, char *input) {
   // Grab filename from command "d <filename>"
   char filename[BUFFERSIZEMAX];
   sscanf(input, "%*c %s", filename);
@@ -31,24 +31,15 @@ void initiateFileDownload(int sockfd, char *input) {
       // Continue without returning
     } else {
       // User doesn't want to overwrite
-      printf("n happened\n");
       return;
     }
   }
 
-  // filename doesn't exists or user wants to overwrite
-  // Download the file
+  // filename in local directory doesn't already exists
+  // or user wants to overwrite => attempt to download the file!
   // Send download command to server to initiate file download
   if (send(sockfd, input, strnlen(input, BUFFERSIZEMAX), 0) == -1) {
-    perror("initializeFileDownload: send error");
-    exit(1);
-  }
-
-  // Open a file to write the downloaded data
-  FILE *fp;
-  fp = fopen(fullpath, "w+");
-  if (fp == NULL) {
-    perror("initializeFileDownload: Error opening file");
+    perror("downloadFileFromServer: send error");
     exit(1);
   }
 
@@ -64,23 +55,38 @@ void initiateFileDownload(int sockfd, char *input) {
   }
   file_size = ntohl(file_size);
 
-  // char file_size_str[BUFFERSIZEMAX];
-  // if ((bytesBeingRead = recv(sockfd, file_size_str, BUFFERSIZEMAX - 1, 0)) >
-  //     0) {
-  //   int file_size = atoi(file_size_str);
-  // } else {
-  //   perror("initializeFileDownload: filesize receipt error");
-  //   exit(1);
-  // }
+  if (file_size <= 0) {
+    // file_size is empty, or does not exist on server
+    // receive error message from server and print it out to client
+    // Receive response from the server
+    int numbytes;
+    char buf[BUFFERSIZEMAX];
+    if ((numbytes = recv(sockfd, buf, BUFFERSIZEMAX - 1, 0)) == -1) {
+      perror("recv");
+      exit(1);
+    }
 
-  printf("file_size: %d\n", file_size);
+    // Print out server response to console
+    buf[numbytes] = '\0';
+    printf("%s", buf);
+
+    // Return out of function
+    return;
+  }
+
+  // file_size is not empty...
+  // Open a file to write the downloaded data
+  FILE *fp;
+  fp = fopen(fullpath, "w+");
+  if (fp == NULL) {
+    perror("initializeFileDownload: Error opening file");
+    exit(1);
+  }
 
   int recData = 0;
   while ((bytesBeingRead = recv(sockfd, buffer, BUFFERSIZEMAX - 1, 0)) > 0) {
     recData += bytesBeingRead;
-    printf("recData: %d, bytesBeingRead: %d\n", recData, bytesBeingRead);
     fwrite(buffer, sizeof(char), bytesBeingRead, fp);
-    printf("wrote to file\n");
     if (bytesBeingRead < BUFFERSIZEMAX || recData >= file_size) {
       // End of file reached
       break;
@@ -91,8 +97,7 @@ void initiateFileDownload(int sockfd, char *input) {
   if (fclose(fp) != 0) {
     perror("initializeFileDownload: error closing file");
   }
-  printf("file closed\n");
-}  // end of initiateFileDownload()
+}  // end of downloadFileFromServer()
 
 int main(int argc, char *argv[]) {
   // hints used in getaddrinfo()
@@ -128,9 +133,11 @@ int main(int argc, char *argv[]) {
       if (connect(sockfd, p->ai_addr, p->ai_addrlen) == -1) {
         // Connection Failed
         close(sockfd);
-        perror("client: connect");
+        // fprintf(stderr, "client: connect");
         continue;
       }
+
+      // Socket has successfully been created and connected, break from for loop
       break;
     }
     if (p == NULL) {
@@ -144,7 +151,6 @@ int main(int argc, char *argv[]) {
     char s[INET6_ADDRSTRLEN];  // Buffer to store char string
     inet_ntop(p->ai_family, get_in_addr((struct sockaddr *)p->ai_addr), s,
               sizeof s);
-    // printf("client: connecting to %s\n", s);
 
     // Display what’s received from server
     int numbytes;
@@ -165,7 +171,7 @@ int main(int argc, char *argv[]) {
       closeSocket(servinfo, sockfd);
       break;
     } else if (input[0] == 'd' || input[0] == 'D') {
-      initiateFileDownload(sockfd, input);
+      downloadFileFromServer(sockfd, input);
       continue;
     }
 
@@ -180,9 +186,12 @@ int main(int argc, char *argv[]) {
       perror("recv");
       exit(1);
     }
+
+    // Print out server response to console
     buf[numbytes] = '\0';
     printf("%s", buf);
 
   }  // End of while(1)
+  closeSocket(servinfo, sockfd);
   return 0;
 }  // End of main()
