@@ -1,17 +1,13 @@
-CC = gcc
-CFLAGS = -c -Wall
+CC=gcc
+CFLAGS= -Wall
 
-all: server367 client367
+all: clean server client
 
-all:
-	make server367
-	make client367
+server:
+	$(CC) $(CFLAGS) -o ./sdir/server ./server.c ./clientServer.h
 
-server367:
-	$(CC) -o server367 server.c clientServer.h
-
-client367:
-	$(CC) -o client367 client.c clientServer.h
-
-clean:
-	rm -f server367 client367
+client: 
+	$(CC) $(CFLAGS) -o ./cdir/client client.c clientServer.h 
+	
+clean: 
+	rm -f ./sdir/server ./cdir/client 

@@ -23,60 +23,68 @@ void printHelpMenu(int new_fd) {
   if (n == -1) {
     perror("send");
   }
-}
+}  // End of printHelpMenu()
 
 void checkForFile(int new_fd, char *response) {
-  char replyMsg[BUFFERSIZE];
-
   // extracts the filename from the response
-  char filename[BUFFERSIZE];
+  char filename[BUFFERSIZEMAX] = {0};
   sscanf(response, "%*c %s", filename);
 
+  char replyMsg[BUFFERSIZEMAX] = {0};
   // check if the server has the file named <filename>
   if (access(filename, F_OK) != -1) {
     // file exists
-    snprintf(replyMsg, strnlen(replyMsg, BUFFERSIZE), "File '%s' exists",
-             filename);
+    snprintf(replyMsg, BUFFERSIZEMAX + 64, "File '%s' exists", filename);
   } else {
     // file does not exist
-    snprintf(replyMsg, strnlen(replyMsg, BUFFERSIZE), "File '%s' not found",
-             filename);
+    snprintf(replyMsg, BUFFERSIZEMAX + 64, "File '%s' not found", filename);
   }
 
   // Send reply back to client
-  send(new_fd, replyMsg, sizeof(replyMsg), 0);
-}
+  send(new_fd, replyMsg, strlen(replyMsg), 0);
+}  // End of checkForFile
 
 void displayFile(int new_fd, char *response, int pipefd[]) {
-  char replyMsg[BUFFERSIZE];
-
   // extracts the filename from the response
-  char filename[BUFFERSIZE];
+  char filename[BUFFERSIZEMAX];
   sscanf(response, "%*c %s", filename);
 
   // check if the server has the file named <filename>
-  if (access(filename, F_OK) != -1) {
+  char fullpath[BUFFERSIZEMAX] =
+      "./sdir/";  // create a char array to store the full path of the file
+  strcat(fullpath, filename);  // concatenate the filename to the path
+  if (access(fullpath, F_OK) != -1) {
     // file exists
     // setup a pipe to redirect server system stdout to client stream
     close(pipefd[0]);    // close the read end in the child process
     dup2(pipefd[1], 1);  // redirect stdout to the write end of the pipe
     close(pipefd[1]);    // close the duplicate write end
     // execute the cat command
-    execlp("cat", "cat", filename, NULL);
+    execlp("cat", "cat", fullpath, NULL);
   } else {
     // file does not exist
-    snprintf(replyMsg, strnlen(replyMsg, BUFFERSIZE), "File '%s' not found",
-             filename);
-    // Send reply back to client
-    send(new_fd, replyMsg, sizeof(replyMsg), 0);
+    // Send notification of error back to client
+    char replyMsg[BUFFERSIZEMAX];
+    int len =
+        snprintf(replyMsg, BUFFERSIZEMAX, "File '%s' not found", filename);
+    send(new_fd, replyMsg, len, 0);
   }
-}
+}  // End of displayFile()
 
+/*
+  This function downloads a file from the server to the client. It takes two
+parameters, an integer new_fd representing the file descriptor of the client,
+and a char pointer response containing the request from the client.
+
+The function first extracts the filename from the response using sscanf(). It
+then checks if the server has a file with that name using access(). If it does,
+it sends the file to the client by opening it in read binary mode and sending it
+in chunks of BUFFERSIZEMAX bytes. If not, it sends an error message back to the
+client. Finally, if a file was opened, it is closed before returning.
+*/
 void downloadFile(int new_fd, char *response) {
-  char replyMsg[BUFFERSIZE];
-
   // extracts the filename from the response
-  char filename[BUFFERSIZE];
+  char filename[BUFFERSIZEMAX];
   sscanf(response, "%*c %s", filename);
 
   // check if the server has the file named <filename>
@@ -84,22 +92,26 @@ void downloadFile(int new_fd, char *response) {
     // file exists
     // send the file to the client
     int file_size;
-    char buffer[BUFFERSIZE];
+    char fileBuffer[BUFFERSIZEMAX];
     FILE *file = fopen(filename, "rb");
+
+    // Check if file was successfully opened
     if (file == NULL) {
       perror("Error opening file");
     } else {
+      // File opened successfully
       fseek(file, 0, SEEK_END);
       file_size = ftell(file);
       rewind(file);
-      snprintf(buffer, sizeof(buffer), "%d", file_size);
-      send(new_fd, buffer, sizeof(buffer), 0);
+      snprintf(fileBuffer, sizeof(fileBuffer), "%d", file_size);
+      send(new_fd, fileBuffer, sizeof(fileBuffer), 0);
       while (file_size > 0) {
-        int bytes_read = fread(buffer, 1, sizeof(buffer), file);
-        if (bytes_read == 0) {
+        int bytes_read = fread(fileBuffer, 1, sizeof(fileBuffer), file);
+        if (bytes_read < BUFFERSIZEMAX) {
+          // End of file reached
           break;
         }
-        if (send(new_fd, buffer, bytes_read, 0) < 0) {
+        if (send(new_fd, fileBuffer, bytes_read, 0) < 0) {
           perror("Error sending file");
           break;
         }
@@ -109,12 +121,13 @@ void downloadFile(int new_fd, char *response) {
     }
   } else {
     // file does not exist
-    snprintf(replyMsg, strnlen(replyMsg, BUFFERSIZE), "File '%s' not found",
+    // Send notification of error back to client
+    char replyMsg[BUFFERSIZEMAX];
+    snprintf(replyMsg, strnlen(replyMsg, BUFFERSIZEMAX), "File '%s' not found",
              filename);
-    // Send reply back to client
-    send(new_fd, replyMsg, sizeof(replyMsg), 0);
+    send(new_fd, replyMsg, strnlen(replyMsg, BUFFERSIZEMAX), 0);
   }
-}
+}  // end of downloadFile()
 
 int main(void) {
   // Get address information for this server which includes the IP address of
@@ -250,16 +263,12 @@ int main(void) {
           close(pipefd[0]);    // close the read end in the child process
           dup2(pipefd[1], 1);  // redirect stdout to the write end of the pipe
           close(pipefd[1]);    // close the duplicate write end
-          // execute the ls command
-          execlp("ls", "ls", NULL);
+                               // execute the ls command
+          execlp("ls", "ls", "-l", "./sdir", NULL);
           break;
         case 'c':
         case 'C':
           checkForFile(new_fd, response);
-          break;
-        case 'p':
-        case 'P':
-          displayFile(new_fd, response, pipefd);
           break;
         case 'd':
         case 'D':
@@ -268,6 +277,10 @@ int main(void) {
         case 'h':
         case 'H':
           printHelpMenu(new_fd);
+          break;
+        case 'p':
+        case 'P':
+          displayFile(new_fd, response, pipefd);
           break;
         default:
           char blank[] = "";
@@ -280,8 +293,8 @@ int main(void) {
 
     } else {
       close(pipefd[1]);  // close the write end in the parent process
-      char buf[BUFFERSIZE];
-      int numbytes = read(pipefd[0], buf, BUFFERSIZE);
+      char buf[BUFFERSIZEMAX];
+      int numbytes = read(pipefd[0], buf, BUFFERSIZEMAX);
       send(new_fd, buf, numbytes, 0);
       close(pipefd[0]);
       close(new_fd);

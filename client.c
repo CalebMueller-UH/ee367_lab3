@@ -6,31 +6,59 @@
 void *get_in_addr(struct sockaddr *sa);
 
 // function for freeing correct socket shutdown
-void closeSocket(struct addrinfo *servinfo, int sockfd);
+void closeSocket(struct addrinfo *servinfo, int sockfd) {
+  freeaddrinfo(servinfo);  // all done with this structure
+  close(sockfd);
+}
 
-void downloadFile(int sockfd, char *fileName) {
-  char buffer[BUFFERSIZE];
-  int n;
-  FILE *fp;
+void initiateFileDownload(int sockfd, char *input) {
+  // Grab filename from command "d <filename>"
+  char filename[BUFFERSIZEMAX];
+  sscanf(input, "%*c %s", filename);
 
-  // Send the file name to the server
-  write(sockfd, fileName, strlen(fileName));
+  // Determine if the filename already exists
+  if (access(filename, F_OK) != -1) {
+    // filename already exists, query user if they'd like to overwrite
+    printf("The file %s already exists, do you want to overwrite it? (y/n)",
+           filename);
+    char answer[BUFFERSIZEMAX];
+    fgets(answer, BUFFERSIZEMAX, stdin);
+    if (answer[0] == 'y' || answer[0] == 'Y') {
+      // User wants to overwrite
+      // Continue without returning
+    } else {
+      // User doesn't want to overwrite
+      return;
+    }
+  }
 
+  // filename doesn't exists or filename exists and user wants to overwrite
+  // Send download command to server to initiate file download
+  if (send(sockfd, input, strlen(input), 0) == -1) {
+    perror("send error");
+    // exit(1);
+    return;
+  }
+
+  // \/ \/ \/ \/ Download the file \/ \/ \/ \/
   // Open a file to write the downloaded data
-  fp = fopen(fileName, "w");
+  FILE *fp;
+  fp = fopen(filename, "w");
   if (fp == NULL) {
     perror("Error opening file");
     exit(1);
   }
 
   // Receive the file data from the server
-  while ((n = read(sockfd, buffer, BUFFERSIZE)) > 0) {
-    fwrite(buffer, sizeof(char), n, fp);
+  char buffer[BUFFERSIZEMAX];
+  int bytesBeingRead;
+  while ((bytesBeingRead = read(sockfd, buffer, BUFFERSIZEMAX)) > 0) {
+    fwrite(buffer, sizeof(char), bytesBeingRead, fp);
   }
 
-  // Close the file
+  // Close the file when done writing
   fclose(fp);
-}
+}  // end of initiateFileDownload()
 
 int main(int argc, char *argv[]) {
   // hints used in getaddrinfo()
@@ -86,8 +114,8 @@ int main(int argc, char *argv[]) {
 
     // Display what’s received from server
     int numbytes;
-    char buf[BUFFERSIZE];
-    if ((numbytes = recv(sockfd, buf, BUFFERSIZE - 1, 0)) == -1) {
+    char buf[BUFFERSIZEMAX];
+    if ((numbytes = recv(sockfd, buf, BUFFERSIZEMAX - 1, 0)) == -1) {
       perror("recv");
       exit(1);
     }
@@ -95,39 +123,15 @@ int main(int argc, char *argv[]) {
     printf("%s", buf);
 
     // Get input from the user
-    char input[BUFFERSIZE];
-    fgets(input, BUFFERSIZE, stdin);
+    char input[BUFFERSIZEMAX];
+    fgets(input, BUFFERSIZEMAX, stdin);
 
     // Check if user wants to quit
     if (input[0] == 'q' || input[0] == 'Q') {
       closeSocket(servinfo, sockfd);
       break;
-    }
-
-    if (input[0] == 'd' || input[0] == 'D') {
-      char filename[BUFFERSIZE];
-      char dummy;
-      sscanf(input, "%s %s", &dummy,
-             filename);  // dummy variable to discard the "d " or "D " prefix
-      if (access(filename, F_OK) != -1) {
-        char answer[BUFFERSIZE];
-        printf("The file %s already exists, do you want to overwrite it? (y/n)",
-               filename);
-        fgets(answer, BUFFERSIZE, stdin);
-        if (answer[0] == 'y' || answer[0] == 'Y') {
-          // proceed to send the command to the server
-          if (send(sockfd, input, strlen(input), 0) == -1) {
-            perror("send");
-            exit(1);
-          }
-          // download the file
-          downloadFile(sockfd, filename);
-
-        } else {
-          // stop processing the command
-          continue;
-        }
-      }
+    } else if (input[0] == 'd' || input[0] == 'D') {
+      initiateFileDownload(sockfd, input);
     }
 
     // Send input to the server
@@ -137,7 +141,7 @@ int main(int argc, char *argv[]) {
     }
 
     // Receive response from the server
-    if ((numbytes = recv(sockfd, buf, BUFFERSIZE - 1, 0)) == -1) {
+    if ((numbytes = recv(sockfd, buf, BUFFERSIZEMAX - 1, 0)) == -1) {
       perror("recv");
       exit(1);
     }
@@ -147,9 +151,3 @@ int main(int argc, char *argv[]) {
   }  // End of while(1)
   return 0;
 }  // End of main()
-
-// function for freeing correct socket shutdown
-void closeSocket(struct addrinfo *servinfo, int sockfd) {
-  freeaddrinfo(servinfo);  // all done with this structure
-  close(sockfd);
-}
