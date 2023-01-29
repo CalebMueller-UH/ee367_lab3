@@ -1,4 +1,14 @@
-#pragma once
+/*
+    File: server.h
+    Description:
+        a stream socket client demo
+        EE367L - Lab #3 - Part 2 Assignment
+    Name: Caleb Mueller
+    Date: 28 January 2023
+*/
+
+#ifndef LAB3_SERVER_H
+#define LAB3_SERVER_H
 
 #include "clientServer.h"
 
@@ -68,11 +78,18 @@ void getPwd(char *pwd) {
     waitpid(child_pid, &status, 0);
     char buf[BUFFERSIZEMAX];
     int numbytes = read(pipefd[0], buf, BUFFERSIZEMAX);
-    printf("contents of buf from getPwd: %s\n", buf);
+    if (numbytes < 0) {
+      perror("read error from getPwd");
+    }
     strcpy(pwd, buf);
+    char *newline = strtok(pwd, "\n");
+    int pwd_len = strlen(pwd);
+    if (pwd[pwd_len - 1] == '\n') {
+      pwd[pwd_len - 1] = '\0';
+    }
     close(pipefd[0]);
   }
-}
+}  // End of getPwd()
 
 /*
 This function takes in four char pointers as parameters: response, pwd,
@@ -83,10 +100,10 @@ The result is a full path that is stored in the fullpath parameter.
 */
 void processResponse(char *response, char *pwd, char *filename,
                      char *fullpath) {
-  // extracts the filename from the response
+  // extract the filename from the response
   sscanf(response, "%*c %s", filename);
 
-  // concatenate directory and filename for fullpath
+  // concatenate present working directory and filename to fullpath
   strcpy(fullpath, pwd);
   strcat(fullpath, "/");
   strcat(fullpath, filename);
@@ -104,6 +121,7 @@ using the send() function.
 */
 void checkForFile(int new_fd, char *response) {
   char pwd[BUFFERSIZEMAX];
+  memset(pwd, 0, sizeof(pwd));
   getPwd(pwd);
   char filename[BUFFERSIZEMAX];
   char fullpath[BUFFERSIZEMAX];
@@ -229,6 +247,7 @@ void sendFileToClient(int new_fd, char *response) {
 void listFile(int new_fd, char *response) {
   char pwd[BUFFERSIZEMAX];
   getPwd(pwd);
-  printf("\n\npwd is: %s\n\n", pwd);
   execlp("ls", "ls", "-l", pwd, NULL);
 }
+
+#endif

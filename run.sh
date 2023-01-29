@@ -5,7 +5,7 @@ make
 
 current_dir=$(pwd)
 gnome-terminal --geometry=100x15 -- $current_dir/sdir/server
-gnome-terminal --geometry=100x15x100 -- $current_dir/cdir/client localhost
+gnome-terminal --geometry=100x15 -- $current_dir/cdir/client localhost
 
 echo ""
 echo ""

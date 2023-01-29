@@ -1,3 +1,12 @@
+/*
+    File: server.c
+    Description:
+        a stream socket client demo
+        EE367L - Lab #3 - Part 2 Assignment
+    Name: Caleb Mueller
+    Date: 28 January 2023
+*/
+
 #include "server.h"
 
 #define PORT "3622"  // Group assigned port used by server: used by the client
@@ -15,6 +24,13 @@ void sigchld_handler(int s) {
 void *get_in_addr(struct sockaddr *sa);
 
 int main(void) {
+  // Use the ./sdir directory which contains the correct server files
+  char *path = "./sdir/";
+  if (chdir(path) != 0) {
+    perror("chdir failed");
+    return 1;
+  }
+
   struct addrinfo hints;
   memset(&hints, 0, sizeof hints);
   hints.ai_family = AF_UNSPEC;

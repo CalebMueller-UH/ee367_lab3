@@ -1,3 +1,12 @@
+/*
+    File: client.c
+    Description:
+        a stream socket client demo
+        EE367L - Lab #3 - Part 2 Assignment
+    Name: Caleb Mueller
+    Date: 26 January 2023
+*/
+
 #include "clientServer.h"
 
 #define PORT "3622"  // group assigned server port
