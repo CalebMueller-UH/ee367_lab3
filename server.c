@@ -134,7 +134,7 @@ int main(void) {
     if (!fork()) {
       // Send command prompt
       const char prompt[] = "\nCommand(enter 'h' for help): ";
-      int n = send(new_fd, prompt, strnlen(prompt, BUFFERSIZEMAX), 0);
+      int n = send(new_fd, prompt, sizeof(prompt), 0);
       if (n == -1) {
         perror("send");
         continue;
@@ -175,7 +175,7 @@ int main(void) {
           break;
         default:
           char blank[] = "";
-          int n = send(new_fd, blank, strnlen(blank, BUFFERSIZEMAX), 0);
+          int n = send(new_fd, blank, sizeof(blank), 0);
           if (n == -1) {
             perror("send");
             continue;

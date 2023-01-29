@@ -3,14 +3,11 @@
 clear
 make
 
-current_dir=$(pwd)
-gnome-terminal --geometry=100x15 -- $current_dir/sdir/server
-gnome-terminal --geometry=100x15 -- $current_dir/cdir/client localhost
+./sdir/server > /dev/null 2>&1 &
+sleep 1
+./cdir/client 127.0.0.1
 
-echo ""
-echo ""
-read -p "Press enter to recompile and restart the terminals"
-pkill -f "$current_dir/sdir/server"
-pkill -f "$current_dir/cdir/client"
+pkill -f ./sdir/server
+pkill -f ./cdir/client
 
-./run.sh
+

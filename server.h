@@ -83,6 +83,9 @@ void getPwd(char *pwd) {
     }
     strcpy(pwd, buf);
     char *newline = strtok(pwd, "\n");
+    if(newline){
+       fprintf(stderr, "appended newline found");
+    }
     int pwd_len = strlen(pwd);
     if (pwd[pwd_len - 1] == '\n') {
       pwd[pwd_len - 1] = '\0';

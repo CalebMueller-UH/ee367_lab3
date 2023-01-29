@@ -21,7 +21,7 @@
 #include <sys/wait.h>
 #include <unistd.h>
 
-#define BUFFERSIZEMAX 256
+#define BUFFERSIZEMAX 104
 #define MAXFILELEN 128
 
 void *get_in_addr(struct sockaddr *sa) {
