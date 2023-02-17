@@ -83,8 +83,8 @@ void getPwd(char *pwd) {
     }
     strcpy(pwd, buf);
     char *newline = strtok(pwd, "\n");
-    if(newline){
-       fprintf(stderr, "appended newline found");
+    if (newline) {
+      fprintf(stderr, "appended newline found");
     }
     int pwd_len = strlen(pwd);
     if (pwd[pwd_len - 1] == '\n') {
@@ -164,15 +164,46 @@ void displayFile(int new_fd, char *response) {
   // check if the server has the file named <filename>
   if (access(fullpath, F_OK) != -1) {
     // file exists
-    execlp("cat", "cat", fullpath, NULL);
+    FILE *file = fopen(fullpath, "r");
+    if (file == NULL) {
+      perror("Error opening file");
+    } else {
+      // File opened successfully
+      int file_size;
+      char fileBuffer[BUFFERSIZEMAX];
+      // Determine file_size
+      fseek(file, 0, SEEK_END);
+      file_size = ftell(file);
+      rewind(file);
+
+      // Put file_size in network bit order before sending
+      file_size = htonl(file_size);
+      send(new_fd, &file_size, sizeof(file_size), 0);
+
+      int bytes_read = 0;
+      while ((bytes_read = fread(fileBuffer, 1, sizeof(fileBuffer), file)) >
+             0) {
+        if (send(new_fd, fileBuffer, bytes_read, 0) < 0) {
+          perror("Error sending file");
+          break;
+        }
+      }
+      fclose(file);
+    }
   } else {
     // file does not exist
+    // Indicate to client that no file is coming by sending a file size of 0
+    int file_size = 0;
+    // Put file_size in network bit order before sending
+    file_size = htonl(file_size);
+    send(new_fd, &file_size, sizeof(file_size), 0);
     // Send notification of error back to client
     char replyMsg[BUFFERSIZEMAX];
     int len =
         snprintf(replyMsg, BUFFERSIZEMAX, "File '%s' not found", filename);
     send(new_fd, replyMsg, len, 0);
   }
+  close(new_fd);
 }  // End of displayFile()
 
 /*
@@ -186,6 +217,7 @@ it sends the file to the client by opening it in read binary mode and sending it
 in chunks of BUFFERSIZEMAX bytes. If not, it sends an error message back to the
 client. Finally, if a file was opened, it is closed before returning.
 */
+
 void sendFileToClient(int new_fd, char *response) {
   char pwd[BUFFERSIZEMAX];
   getPwd(pwd);
@@ -197,7 +229,7 @@ void sendFileToClient(int new_fd, char *response) {
   if (access(fullpath, F_OK) != -1) {
     // file exists
     // send the file to the client
-    int file_size;
+    int64_t file_size;
     char fileBuffer[BUFFERSIZEMAX];
     FILE *file = fopen(fullpath, "rb");
 
@@ -217,24 +249,20 @@ void sendFileToClient(int new_fd, char *response) {
       send(new_fd, &file_size, sizeof(file_size), 0);
 
       // Ferry file data accross socket to client
-      while (file_size >= 0) {
-        int bytes_read = fread(fileBuffer, 1, sizeof(fileBuffer), file);
+      int bytes_read = 0;
+      while ((bytes_read = fread(fileBuffer, 1, sizeof(fileBuffer), file)) >
+             0) {
         if (send(new_fd, fileBuffer, bytes_read, 0) < 0) {
           perror("Error sending file");
           break;
         }
-        if (bytes_read < BUFFERSIZEMAX) {
-          // End of file reached
-          break;
-        }
-        file_size -= bytes_read;
       }
       fclose(file);
     }
   } else {
     // file does not exist
     // indicate to client that no file is coming by sending a filesize of 0
-    int file_size = 0;
+    int64_t file_size = 0;
     // Put file_size in network bit order before sending
     file_size = htonl(file_size);
     send(new_fd, &file_size, sizeof(file_size), 0);
@@ -250,7 +278,7 @@ void sendFileToClient(int new_fd, char *response) {
 void listFile(int new_fd, char *response) {
   char pwd[BUFFERSIZEMAX];
   getPwd(pwd);
-  execlp("ls", "ls", "-l", pwd, NULL);
+  execlp("ls", "ls", pwd, NULL);
 }
 
 #endif

@@ -24,6 +24,7 @@ void downloadFileFromServer(int sockfd, char *input) {
   // Grab filename from command "d <filename>"
   char filename[BUFFERSIZEMAX];
   sscanf(input, "%*c %s", filename);
+
   // create a char array to store the full path of the file
   char fullpath[BUFFERSIZEMAX] = "./cdir/";
   strcat(fullpath, filename);  // concatenate the filename to the path
@@ -52,61 +53,74 @@ void downloadFileFromServer(int sockfd, char *input) {
     exit(1);
   }
 
-  // Receive the file data from the server
-  char buffer[BUFFERSIZEMAX];
-  int bytesBeingRead;
-
-  // Get the file_size from the server
-  int file_size;
-  if (recv(sockfd, &file_size, sizeof(file_size), 0) < 0) {
-    perror("initializeFileDownload: filesize receipt error");
-    exit(1);
-  }
+  // Receive file size
+  int64_t file_size;
+  recv(sockfd, &file_size, sizeof(file_size), 0);
   file_size = ntohl(file_size);
 
-  if (file_size <= 0) {
-    // file_size is empty, or does not exist on server
-    // receive error message from server and print it out to client
-    // Receive response from the server
-    int numbytes;
-    char buf[BUFFERSIZEMAX];
-    if ((numbytes = recv(sockfd, buf, BUFFERSIZEMAX - 1, 0)) == -1) {
-      perror("recv");
-      exit(1);
+  if (file_size > 0) {
+    // Create a file with the given name and open it in write binary mode
+    FILE *file = fopen(fullpath, "wb");
+    if (file == NULL) {
+      perror("Error opening file");
+    } else {
+      // File opened successfully
+      char fileBuffer[BUFFERSIZEMAX];
+      int64_t bytes_received = 0;
+      while (bytes_received < file_size) {
+        int bytes_read = recv(sockfd, fileBuffer, sizeof(fileBuffer), 0);
+        if (bytes_read <= 0) {
+          break;
+        }
+        fwrite(fileBuffer, 1, bytes_read, file);
+        bytes_received += bytes_read;
+      }
+      fclose(file);
     }
-
-    // Print out server response to console
-    buf[numbytes] = '\0';
-    printf("%s", buf);
-
-    // Return out of function
-    return;
+  } else {
+    // Receive error message from server
+    char errorMsg[BUFFERSIZEMAX];
+    recv(sockfd, errorMsg, sizeof(errorMsg), 0);
+    printf("%s\n", errorMsg);
   }
+}  // end of downloadFileFromServer()
 
-  // file_size is not empty...
-  // Open a file to write the downloaded data
-  FILE *fp;
-  fp = fopen(fullpath, "w+");
-  if (fp == NULL) {
-    perror("initializeFileDownload: Error opening file");
+void displayFileFromServer(int sockfd, char *input) {
+  // Grab filename from command "d <filename>"
+  char filename[BUFFERSIZEMAX];
+  sscanf(input, "%*c %s", filename);
+
+  // filename in local directory doesn't already exists
+  // or user wants to overwrite => attempt to download the file!
+  // Send download command to server to initiate file download
+  if (send(sockfd, input, strnlen(input, BUFFERSIZEMAX), 0) == -1) {
+    perror("downloadFileFromServer: send error");
     exit(1);
   }
 
-  int recData = 0;
-  while ((bytesBeingRead = recv(sockfd, buffer, BUFFERSIZEMAX - 1, 0)) > 0) {
-    recData += bytesBeingRead;
-    fwrite(buffer, sizeof(char), bytesBeingRead, fp);
-    if (bytesBeingRead < BUFFERSIZEMAX || recData >= file_size) {
-      // End of file reached
-      break;
-    }
-  }
+  // Receive file size
+  int64_t file_size;
+  recv(sockfd, &file_size, sizeof(file_size), 0);
+  file_size = ntohl(file_size);
 
-  // Close the file when done writing
-  if (fclose(fp) != 0) {
-    perror("initializeFileDownload: error closing file");
+  if (file_size > 0) {
+    char fileBuffer[BUFFERSIZEMAX];
+    int64_t bytes_received = 0;
+    while (bytes_received < file_size) {
+      int bytes_read = recv(sockfd, fileBuffer, sizeof(fileBuffer), 0);
+      if (bytes_read <= 0) {
+        break;
+      }
+      printf("%s", fileBuffer);
+      bytes_received += bytes_read;
+    }
+  } else {
+    // Receive error message from server
+    char errorMsg[BUFFERSIZEMAX];
+    recv(sockfd, errorMsg, sizeof(errorMsg), 0);
+    printf("%s\n", errorMsg);
   }
-}  // end of downloadFileFromServer()
+}  // end of displayFileFromServer
 
 int main(int argc, char *argv[]) {
   // hints used in getaddrinfo()
@@ -181,6 +195,9 @@ int main(int argc, char *argv[]) {
       break;
     } else if (input[0] == 'd' || input[0] == 'D') {
       downloadFileFromServer(sockfd, input);
+      continue;
+    } else if (input[0] == 'p' || input[0] == 'P') {
+      displayFileFromServer(sockfd, input);
       continue;
     }
 

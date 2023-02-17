@@ -171,7 +171,7 @@ int main(void) {
           break;
         case 'p':
         case 'P':
-          pipeRedirect(new_fd, response, displayFile);
+          pipeRedirect(new_fd, response, sendFileToClient);
           break;
         default:
           char blank[] = "";
