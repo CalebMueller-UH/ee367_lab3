@@ -13,6 +13,3 @@ Please note the following:
 - The stderr and stdout output of the server has been silenced in the call within the bashcript.  If for some reason you need to see this output you can execute the client and server through ./cdir/client 127.0.0.1    and    ./sdir/server respectively
 - The client has been set to communicate via the local loopback network adapter 127.0.0.1
 - To cleanly exit the client be sure to use the 'q' / 'Q' command, as this will exit into the bash script which then cleans up any left over processes
-
-
-Aloha, and mahalo nui loa!
